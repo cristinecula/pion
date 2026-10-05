@@ -150,8 +150,28 @@ function makeComponent(render: RenderFunction): Creator {
         if (oldValue === newValue) {
           return;
         }
-        let val = newValue === "" ? true : newValue;
-        Reflect.set(this, toCamelCase(name), val);
+        const camel = toCamelCase(name);
+        // look for an accessor, native (aria-*, title) or base class
+        let proto = Object.getPrototypeOf(this) as object | null;
+        let desc: PropertyDescriptor | undefined;
+        while (proto) {
+          const d = Object.getOwnPropertyDescriptor(proto, camel);
+          if (d) {
+            desc = d;
+            break;
+          }
+          proto = Object.getPrototypeOf(proto);
+        }
+        // found: setter would reflect into the attribute, no render, "" coerced
+        if (desc) {
+          // render from the attribute, the source of truth
+          this._scheduler?.update();
+          // keep camelCase reads fresh
+          desc.set?.call(this, newValue);
+          return;
+        }
+        // otherwise: install the reactive property, "" means true
+        Reflect.set(this, camel, newValue === "" ? true : newValue);
       }
     }
 

@@ -34,8 +34,8 @@ describe("Observed attributes", () => {
       title: string;
     }
 
-    function App(this: unknown) {
-      (this as HTMLElement).setAttribute("title", "bar");
+    function App(this: HTMLElement) {
+      return html`<div>title=${this.title ?? "null"}</div>`;
     }
 
     customElements.define(
@@ -43,9 +43,34 @@ describe("Observed attributes", () => {
       component<HTMLElement & Props>(App, { observedAttributes: ["title"] })
     );
 
-    const el = await fixture(html`<attrs-test-title></attrs-test-title>`);
+    const el = (await fixture(
+      html`<attrs-test-title></attrs-test-title>`
+    )) as HTMLElement;
+    await nextFrame();
 
-    expect(el.getAttribute("title")).to.equal("bar");
+    el.setAttribute("title", "world");
+    await nextFrame();
+
+    expect(el.getAttribute("title")).to.equal("world");
+    expect(el.shadowRoot.textContent).to.equal("title=world");
+  });
+
+  it("converges when the renderer writes an observed attribute", async () => {
+    const tag = "attrs-attr-cascade-test";
+    let renders = 0;
+    customElements.define(
+      tag,
+      component(function (this: HTMLElement) {
+        renders++;
+        this.setAttribute("title", "fixed");
+        return html`<div></div>`;
+      }, { observedAttributes: ["title"] })
+    );
+
+    await fixture(html`<attrs-attr-cascade-test></attrs-attr-cascade-test>`);
+    await nextFrame();
+
+    expect(renders).to.be.at.most(2);
   });
 
   it("Trigger rerenders while declared as an option", async () => {
